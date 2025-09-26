@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PDF Merger — Single File</title>
+<style>
+  :root {
+    --bg: #0f172a;       /* slate-900 */
+    --panel: #111827;    /* gray-900 */
+    --muted: #94a3b8;    /* slate-400 */
+    --text: #e5e7eb;     /* gray-200 */
+    --accent: #22c55e;   /* green-500 */
+    --accent-2: #06b6d4; /* cyan-500 */
+    --danger: #ef4444;   /* red-500 */
+    --card: #0b1220;     /* deep card */
+    --border: #1f2937;   /* gray-800 */
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 30% -10%, #1e293b 0%, transparent 60%),
+                radial-gradient(900px 600px at 110% 10%, #0ea5e9 0%, transparent 50%),
+                var(--bg);
+    color: var(--text);
+  }
+  .wrap {
+    max-width: 920px; margin: 48px auto; padding: 0 16px;
+  }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    overflow: hidden;
+  }
+  header {
+    padding: 24px 24px 12px;
+  }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: .3px; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .controls {
+    display: flex; gap: 12px; padding: 16px 24px 8px; flex-wrap: wrap;
+  }
+  input[type="file"] {
+    display: inline-block; padding: 10px 12px; border-radius: 12px; background: var(--panel);
+    border: 1px dashed #334155; color: var(--text); cursor: pointer; width: 100%;
+    max-width: 420px;
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--border); background: var(--card);
+    color: var(--text); padding: 10px 14px; border-radius: 12px; cursor: pointer;
+    font-weight: 600; letter-spacing: .2px; transition: transform .06s ease, border-color .2s ease, opacity .2s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: #334155; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { border-color: #14532d; background: linear-gradient(180deg, #14532d, #0b3b20); }
+  .btn.accent { border-color: #0f766e; background: linear-gradient(180deg, #0f766e, #0b4f49); }
+  .btn.danger { border-color: #7f1d1d; background: linear-gradient(180deg, #7f1d1d, #4c1313); }
+  .drop {
+    margin: 0 24px 20px; padding: 18px; border: 2px dashed #334155; border-radius: 14px;
+    text-align: center; color: var(--muted); background: rgba(2,6,23,.4);
+  }
+  .drop.dragover { border-color: var(--accent-2); color: var(--text); background: rgba(6,182,212,.08); }
+  .list {
+    padding: 0 8px 8px; margin: 0; list-style: none; max-height: 420px; overflow: auto;
+  }
+  .item {
+    display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 12px;
+    padding: 10px 14px; margin: 8px; border-radius: 12px; background: rgba(2,6,23,.55);
+    border: 1px solid #1f2937;
+  }
+  .item[draggable="true"] { cursor: grab; }
+  .item.dragging { opacity: .6; border-style: dashed; }
+  .handle { font-size: 18px; color: var(--muted); user-select: none; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .name { font-weight: 600; }
+  .rmv { color: var(--danger); border: none; background: transparent; font-weight: 700; cursor: pointer; }
+  footer {
+    padding: 16px 24px 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--border);
+  }
+  .status { color: var(--muted); font-size: 13px; }
+  .right { display: flex; gap: 10px; flex-wrap: wrap; }
+  .small { font-size: 12px; color: var(--muted); }
+  .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #0b1220; padding: 2px 6px; border-radius: 6px; border: 1px solid #1f2937; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <h1>PDF Merger</h1>
+        <p>Upload <em>any number</em> of PDFs, drag to reorder, then merge — all in your browser.</p>
+      </header>
+
+      <div class="controls">
+        <input id="file" type="file" accept="application/pdf" multiple />
+        <button class="btn accent" id="add-demo" title="Add sample order numbers as names (no files)">Demo Order</button>
+        <button class="btn danger" id="clear">Clear List</button>
+      </div>
+
+      <div class="drop" id="drop">Drop PDFs here or use the file picker above</div>
+
+      <ul class="list" id="list"></ul>
+
+      <footer>
+        <div class="status" id="status">No files yet.</div>
+        <div class="right">
+          <label class="small">Output name:
+            <input id="outName" value="merged.pdf" style="background:#0b1220;color:#e5e7eb;border:1px solid #1f2937;border-radius:8px;padding:6px 10px;margin-left:6px;min-width:180px;">
+          </label>
+          <button class="btn primary" id="merge" disabled>Merge PDFs</button>
+        </div>
+      </footer>
+    </div>
+    <p class="small" style="margin-top:10px">Tip: Drag rows to reorder. Hold <span class="kbd">Ctrl/Cmd</span> when choosing files to multi-select.</p>
+  </div>
+
+  <!-- pdf-lib from CDN (client-only; no server) -->
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script>
+  (function() {
+    const fileInput = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    const list = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+    const mergeBtn = document.getElementById('merge');
+    const clearBtn = document.getElementById('clear');
+    const outNameEl = document.getElementById('outName');
+    const addDemoBtn = document.getElementById('add-demo');
+
+    /** State of selected files in order */
+    let items = []; // { id, file, name, size }
+
+    function humanSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      const u = ['KB', 'MB', 'GB', 'TB'];
+      let i = -1;
+      do { bytes /= 1024; i++; } while (bytes >= 1024 && i < u.length - 1);
+      return bytes.toFixed(bytes < 10 ? 1 : 0) + ' ' + u[i];
+    }
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function refreshUI() {
+      list.innerHTML = '';
+      if (items.length === 0) {
+        setStatus('No files yet.');
+        mergeBtn.disabled = true;
+        return;
+      }
+      mergeBtn.disabled = false;
+      setStatus(`${items.length} file${items.length>1?'s':''} queued — drag to reorder, click × to remove.`);
+      for (const it of items) {
+        const li = document.createElement('li');
+        li.className = 'item';
+        li.draggable = true;
+        li.dataset.id = it.id;
+
+        const handle = document.createElement('div');
+        handle.className = 'handle';
+        handle.textContent = '⠿';
+        li.appendChild(handle);
+
+        const mid = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = it.name;
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = humanSize(it.size);
+        mid.appendChild(name); mid.appendChild(meta);
+        li.appendChild(mid);
+
+        const rmv = document.createElement('button');
+        rmv.className = 'rmv';
+        rmv.textContent = '×';
+        rmv.title = 'Remove';
+        rmv.addEventListener('click', () => {
+          items = items.filter(x => x.id !== it.id);
+          refreshUI();
+        });
+        li.appendChild(rmv);
+
+        // Drag events
+        li.addEventListener('dragstart', (e) => {
+          li.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', it.id);
+        });
+        li.addEventListener('dragend', () => li.classList.remove('dragging'));
+        list.appendChild(li);
+      }
+    }
+
+    function addFiles(fileList) {
+      const pdfs = Array.from(fileList).filter(f => f && f.type === 'application/pdf');
+      let added = 0;
+      for (const f of pdfs) {
+        const id = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + Math.random()).toString(36);
+        items.push({ id, file: f, name: f.name, size: f.size });
+        added++;
+      }
+      if (added === 0 && fileList.length) {
+        setStatus('Some files were skipped (not PDFs).');
+      }
+      refreshUI();
+    }
+
+    // File input
+    fileInput.addEventListener('change', (e) => addFiles(e.target.files));
+
+    // Drag & drop
+    ['dragenter','dragover'].forEach(evt =>
+      drop.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        drop.classList.add('dragover');
+      })
+    );
+    ['dragleave','drop'].forEach(evt =>
+      drop.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        drop.classList.remove('dragover');
+      })
+    );
+    drop.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files) addFiles(dt.files);
+    });
+
+    // Reorder with drag & drop inside the list
+    list.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const dragging = list.querySelector('.dragging');
+      if (!dragging) return;
+      const after = getDragAfterElement(list, e.clientY);
+      if (after == null) list.appendChild(dragging);
+      else list.insertBefore(dragging, after);
+    });
+    list.addEventListener('drop', () => {
+      // Commit order back to items
+      const newOrder = [];
+      list.querySelectorAll('.item').forEach(li => {
+        const id = li.dataset.id;
+        const it = items.find(x => x.id === id);
+        if (it) newOrder.push(it);
+      });
+      items = newOrder;
+      refreshUI();
+    });
+
+    function getDragAfterElement(container, y) {
+      const els = [...container.querySelectorAll('.item:not(.dragging)')];
+      return els.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    clearBtn.addEventListener('click', () => {
+      items = [];
+      fileInput.value = '';
+      refreshUI();
+    });
+
+    addDemoBtn.addEventListener('click', () => {
+      // Adds fake rows (no files) to demonstrate sorting UI
+      // You can still add real files afterwards.
+      const n = 4 + Math.floor(Math.random()*4);
+      for (let i=0;i<n;i++){
+        const id = (Date.now()+Math.random()).toString(36);
+        items.push({ id, file: null, name: `Sample-${i+1} (no file)`, size: 0 });
+      }
+      refreshUI();
+    });
+
+    async function merge() {
+      const valid = items.filter(it => it.file instanceof File);
+      if (valid.length === 0) { setStatus('No PDFs to merge.'); return; }
+      mergeBtn.disabled = true;
+      setStatus('Merging… (reading files)');
+      try {
+        const { PDFDocument } = window['PDFLib'];
+        const outPdf = await PDFDocument.create();
+
+        for (let idx = 0; idx < valid.length; idx++) {
+          const it = valid[idx];
+          setStatus(`Merging ${idx+1}/${valid.length}: ${it.name}`);
+          const bytes = new Uint8Array(await it.file.arrayBuffer());
+          const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+          const copied = await outPdf.copyPages(src, src.getPageIndices());
+          copied.forEach(p => outPdf.addPage(p));
+        }
+
+        setStatus('Finalizing…');
+        const mergedBytes = await outPdf.save({ addDefaultPage: false, useObjectStreams: true });
+        const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+        const name = (outNameEl.value || 'merged.pdf').replace(/[/\\:?*"<>|]+/g, '_');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name.endsWith('.pdf') ? name : (name + '.pdf');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        setStatus(`Done. Downloaded "${a.download}".`);
+      } catch (err) {
+        console.error(err);
+        alert('Merge failed: ' + (err && err.message ? err.message : err));
+        setStatus('Merge failed.');
+      } finally {
+        mergeBtn.disabled = false;
+      }
+    }
+
+    mergeBtn.addEventListener('click', () => merge());
+
+    // Keyboard paste support (paste a PDF from clipboard)
+    window.addEventListener('paste', (e) => {
+      if (!e.clipboardData) return;
+      const files = e.clipboardData.files;
+      if (files && files.length) addFiles(files);
+    });
+
+    refreshUI();
+  })();
+  </script>
+</body>
+</html>
