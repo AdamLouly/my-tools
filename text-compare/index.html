@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Text Compare — Single File</title>
+<style>
+  :root{
+    --bg:#0f172a;--panel:#0b1220;--muted:#94a3b8;--text:#e5e7eb;
+    --border:#1f2937;--green:#064e3b;--red:#7f1d1d;--yellow:#713f12;
+    --green-bg:#052e24;--red-bg:#2a0d0d;--yellow-bg:#231607;
+    --accent:#22c55e;--accent2:#06b6d4;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:radial-gradient(1200px 600px at 30% -10%,#1e293b 0%,transparent 60%),
+               radial-gradient(900px 600px at 110% 10%,#0ea5e9 0%,transparent 50%),
+               var(--bg);
+    color:var(--text)
+  }
+  .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01));
+    border:1px solid var(--border);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);
+    overflow:hidden
+  }
+  header{padding:20px 20px 10px}
+  h1{margin:0;font-size:20px}
+  p.muted{margin:6px 0 0;color:var(--muted);font-size:12px}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;padding:12px 20px 16px}
+  .btn{
+    appearance:none;border:1px solid var(--border);background:var(--panel);color:var(--text);
+    padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600;letter-spacing:.2px
+  }
+  .btn:hover{border-color:#334155}
+  .btn.primary{border-color:#14532d;background:linear-gradient(180deg,#14532d,#0b3b20)}
+  .btn.alt{border-color:#0f766e;background:linear-gradient(180deg,#0f766e,#0b4f49)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border)}
+  .col{display:flex;flex-direction:column;min-height:260px}
+  .col header{display:flex;align-items:center;justify-content:space-between;
+              border-bottom:1px solid var(--border);padding:10px 14px}
+  .col h2{font-size:14px;margin:0;font-weight:700;color:#cbd5e1}
+  textarea{
+    width:100%;min-height:240px;resize:vertical;border:0;border-right:1px solid var(--border);
+    padding:12px 14px;background:rgba(2,6,23,.45);color:var(--text);outline:none;font-size:13px;line-height:1.5
+  }
+  .right textarea{border-right:0;border-left:1px solid var(--border)}
+  .results{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border)}
+  .pane{max-height:420px;overflow:auto;border-top:1px solid var(--border)}
+  .line{
+    display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:start;
+    padding:2px 10px;border-bottom:1px dashed rgba(148,163,184,.1);white-space:pre-wrap;word-break:break-word
+  }
+  .ln{color:#94a3b8;text-align:right;opacity:.7;font-size:12px;padding-top:2px}
+  .eq   {background:transparent}
+  .ins  {background:var(--green-bg);border-left:3px solid var(--green)}
+  .del  {background:var(--red-bg);border-left:3px solid var(--red)}
+  .chg  {background:var(--yellow-bg);border-left:3px solid var(--yellow)}
+  mark{background:#fde68a26;border-bottom:1px solid #f59e0b33;border-radius:2px;padding:0 1px}
+  .status{padding:10px 14px;color:var(--muted);font-size:12px;border-top:1px solid var(--border)}
+  .tip{color:var(--muted);font-size:12px;padding:10px 16px}
+  @media (max-width:900px){
+    .grid,.results{grid-template-columns:1fr}
+    .right textarea{border-left:0}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <h1>Text Compare</h1>
+        <p class="muted">Paste or type into the left and right boxes, then click <b>Compare</b>. Differences are shown per line, with inline highlights for changed segments.</p>
+      </header>
+
+      <div class="controls">
+        <button id="btnSwap" class="btn alt" title="Swap left/right">Swap</button>
+        <button id="btnClear" class="btn" title="Clear both">Clear</button>
+        <button id="btnSample" class="btn" title="Load sample">Sample</button>
+        <button id="btnCompare" class="btn primary" title="Compare (Ctrl/Cmd+Enter)">Compare</button>
+        <label style="display:flex;align-items:center;gap:6px;margin-left:auto;color:var(--muted);font-size:12px">
+          <input type="checkbox" id="optIgnoreCase"> Ignore case
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px">
+          <input type="checkbox" id="optInline" checked> Inline changes
+        </label>
+      </div>
+
+      <div class="grid">
+        <div class="col left">
+          <header><h2>Left</h2><small class="muted">Original</small></header>
+          <textarea id="left" spellcheck="false" placeholder="Paste or type here..."></textarea>
+        </div>
+        <div class="col right">
+          <header><h2>Right</h2><small class="muted">Modified</small></header>
+          <textarea id="right" spellcheck="false" placeholder="Paste or type here..."></textarea>
+        </div>
+      </div>
+
+      <div id="status" class="status">Ready.</div>
+
+      <div class="results" id="results" aria-live="polite"></div>
+
+      <div class="tip">Tip: Press <b>Ctrl/Cmd + Enter</b> to compare. Treats input as <i>lines</i> (split on “\n”).</div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const leftEl    = document.getElementById('left');
+  const rightEl   = document.getElementById('right');
+  const compareEl = document.getElementById('btnCompare');
+  const swapEl    = document.getElementById('btnSwap');
+  const clearEl   = document.getElementById('btnClear');
+  const sampleEl  = document.getElementById('btnSample');
+  const statusEl  = document.getElementById('status');
+  const resultsEl = document.getElementById('results');
+  const optIgnoreCase = document.getElementById('optIgnoreCase');
+  const optInline     = document.getElementById('optInline');
+
+  // --- Utilities ---
+  const splitLines = s => s.replace(/\r\n?/g, '\n').split('\n');
+
+  function setStatus(msg){ statusEl.textContent = msg; }
+
+  // Longest Common Subsequence (LCS) for lines with custom equality
+  function lcsWithEq(a, b, eq){
+    const n = a.length, m = b.length;
+    const dp = Array.from({length:n+1}, ()=>new Array(m+1).fill(0));
+    for(let i=1;i<=n;i++){
+      for(let j=1;j<=m;j++){
+        dp[i][j] = (eq(a[i-1], b[j-1])) ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+      }
+    }
+    // backtrack to build ops
+    const ops = [];
+    let i=n, j=m;
+    while(i>0 || j>0){
+      if(i>0 && j>0 && eq(a[i-1], b[j-1])){
+        ops.push({type:'eq', aIdx:i-1, bIdx:j-1});
+        i--; j--;
+      } else if(j>0 && (i===0 || dp[i][j-1] >= dp[i-1][j])){
+        ops.push({type:'ins', bIdx:j-1});
+        j--;
+      } else if(i>0 && (j===0 || dp[i][j-1] < dp[i-1][j])){
+        ops.push({type:'del', aIdx:i-1});
+        i--;
+      }
+    }
+    return ops.reverse();
+  }
+
+  // Inline diff (char-level) using LCS; returns HTML with <mark> on changed spans
+  function inlineDiff(aStr, bStr){
+    const a = [...aStr], b = [...bStr];
+    const n=a.length, m=b.length;
+    const dp = Array.from({length:n+1}, ()=>new Array(m+1).fill(0));
+    for(let i=1;i<=n;i++){
+      for(let j=1;j<=m;j++){
+        dp[i][j] = (a[i-1]===b[j-1]) ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+      }
+    }
+    let i=n, j=m;
+    const leftOut=[], rightOut=[];
+    while(i>0 || j>0){
+      if(i>0 && j>0 && a[i-1]===b[j-1]){
+        leftOut.push(escapeHtml(a[i-1]));
+        rightOut.push(escapeHtml(b[j-1]));
+        i--; j--;
+      } else if(j>0 && (i===0 || dp[i][j-1] >= dp[i-1][j])){
+        rightOut.push('<mark>'+escapeHtml(b[j-1])+'</mark>'); j--;
+      } else {
+        leftOut.push('<mark>'+escapeHtml(a[i-1])+'</mark>'); i--;
+      }
+    }
+    return {
+      leftHTML: leftOut.reverse().join(''),
+      rightHTML: rightOut.reverse().join('')
+    };
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => (
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]
+    )).replace(/ /g,'&nbsp;');
+  }
+
+  function renderDiff(aLines, bLines, {ignoreCase, inlineChanges}){
+    const eq = ignoreCase ? (x,y)=>String(x).toLowerCase()===String(y).toLowerCase() : (x,y)=>x===y;
+    const ops = lcsWithEq(aLines, bLines, eq);
+
+    // Build parallel panes
+    const leftPane  = document.createElement('div');  leftPane.className='pane';
+    const rightPane = document.createElement('div');  rightPane.className='pane';
+    let leftNum=0, rightNum=0, changes=0;
+
+    for(const op of ops){
+      if(op.type==='eq'){
+        leftNum++; rightNum++;
+        const line = aLines[op.aIdx];
+        leftPane.appendChild(makeLine('eq', leftNum, line));
+        rightPane.appendChild(makeLine('eq', rightNum, line));
+      } else if(op.type==='del'){
+        leftNum++; changes++;
+        leftPane.appendChild(makeLine('del', leftNum, aLines[op.aIdx]));
+        rightPane.appendChild(makeLine('del', '', ''));
+      } else if(op.type==='ins'){
+        rightNum++; changes++;
+        leftPane.appendChild(makeLine('ins', '', ''));
+        rightPane.appendChild(makeLine('ins', rightNum, bLines[op.bIdx]));
+      }
+    }
+
+    // Second pass: where a del is followed by an ins (or vice versa), treat as change and optionally inline diff
+    const lChildren = [...leftPane.children];
+    const rChildren = [...rightPane.children];
+    for(let k=0;k<lChildren.length-1;k++){
+      const L = lChildren[k], R = rChildren[k];
+      const Lnext = lChildren[k+1], Rnext = rChildren[k+1];
+      // del + ins pair aligned at same visual row
+      if(L.classList.contains('del') && R.classList.contains('ins')){
+        L.classList.remove('del'); R.classList.remove('ins');
+        L.classList.add('chg'); R.classList.add('chg');
+        if(inlineChanges){
+          const lText = L.querySelector('.txt').textContent;
+          const rText = R.querySelector('.txt').textContent;
+          const {leftHTML,rightHTML} = inlineDiff(lText, rText);
+          L.querySelector('.txt').innerHTML = leftHTML;
+          R.querySelector('.txt').innerHTML = rightHTML;
+        }
+      }
+      // Handle ins + del (rare due to backtrack path)
+      else if(L.classList.contains('ins') && R.classList.contains('del')){
+        L.classList.remove('ins'); R.classList.remove('del');
+        L.classList.add('chg'); R.classList.add('chg');
+        if(inlineChanges){
+          const lText = L.querySelector('.txt').textContent;
+          const rText = R.querySelector('.txt').textContent;
+          const {leftHTML,rightHTML} = inlineDiff(lText, rText);
+          L.querySelector('.txt').innerHTML = leftHTML;
+          R.querySelector('.txt').innerHTML = rightHTML;
+        }
+      }
+    }
+
+    resultsEl.innerHTML = '';
+    resultsEl.appendChild(leftPane);
+    resultsEl.appendChild(rightPane);
+    setStatus(`Compared ${aLines.length} vs ${bLines.length} lines — ${changes} change${changes!==1?'s':''} detected.`);
+
+    // sync scroll between panes
+    const panes = [leftPane, rightPane];
+    let syncing = false;
+    panes.forEach((pane, idx) => {
+      pane.addEventListener('scroll', ()=>{
+        if(syncing) return; syncing = true;
+        const other = panes[1-idx];
+        other.scrollTop = pane.scrollTop;
+        other.scrollLeft = pane.scrollLeft;
+        syncing = false;
+      });
+    });
+  }
+
+  function makeLine(kind, num, text){
+    const div = document.createElement('div');
+    div.className = `line ${kind}`;
+    const ln = document.createElement('div'); ln.className='ln'; ln.textContent = num || '';
+    const txt = document.createElement('div'); txt.className='txt'; txt.textContent = text ?? '';
+    div.appendChild(ln); div.appendChild(txt);
+    return div;
+  }
+
+  // --- UI actions ---
+  compareEl.addEventListener('click', () => {
+    const a = splitLines(leftEl.value);
+    const b = splitLines(rightEl.value);
+    renderDiff(a, b, {ignoreCase: !!optIgnoreCase.checked, inlineChanges: !!optInline.checked});
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if((e.metaKey||e.ctrlKey) && e.key==='Enter'){ compareEl.click(); }
+  });
+
+  swapEl.addEventListener('click', ()=>{
+    const t = leftEl.value; leftEl.value = rightEl.value; rightEl.value = t;
+    setStatus('Swapped.');
+  });
+
+  clearEl.addEventListener('click', ()=>{
+    leftEl.value=''; rightEl.value=''; resultsEl.innerHTML=''; setStatus('Cleared.');
+  });
+
+  sampleEl.addEventListener('click', ()=>{
+    leftEl.value = [
+      'line one',
+      'line two',
+      'line three',
+      'alpha beta gamma',
+      'unchanged',
+      'remove me'
+    ].join('\n');
+    rightEl.value = [
+      'line one',
+      'line 2 (edited)',
+      'alpha beta GAMA',
+      'line three',
+      'unchanged',
+      'new tail line'
+    ].join('\n');
+    setStatus('Loaded sample. Press Compare.');
+  });
+
+  setStatus('Ready.');
+})();
+</script>
+</body>
+</html>
